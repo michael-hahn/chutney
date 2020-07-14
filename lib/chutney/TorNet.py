@@ -268,7 +268,7 @@ def run_tor(cmdline, exit_on_missing=True):
             raise
     return stdouterr
 
-def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
+def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True, start=False):
     """Launch the command line cmdline, which must start with the path or
        name of a binary. Use tor_name as the canonical name of the binary in
        logs. Pass stdin to the Popen constructor.
@@ -284,12 +284,27 @@ def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
     else:
         raise ValueError("Unknown tor_name: '{}'".format(tor_name))
     try:
-        p = subprocess.Popen(cmdline,
-                             stdin=stdin,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT,
-                             universal_newlines=True,
-                             bufsize=-1)
+        #TODO: hardcoded condition. Set the Tor client
+	#TODO: node named "009c" to be tracked by Pin.
+	#TODO: Tracked Tor process must be spawned by
+	#TODO: os.system instead of Popen; otherwise,
+	#TODO: gdb remote connection cannot be established.
+        if start and "009c" in cmdline[2]:
+            pin = "/home/michael/Downloads/splice/pin-2.14-71313-gcc.4.4.7-linux/pin"
+            cmdline.insert(0, pin)
+            cmdline.insert(1, "-appdebug")
+            cmdline.insert(2, "-t")
+            cmdline.insert(3, "/home/michael/Downloads/splice/obj-ia32/nullpin.so")
+            cmdline.insert(4, "--")
+            p = os.system(' '.join(cmdline))
+        else:
+            p = subprocess.Popen(cmdline,
+                                 stdin=stdin,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 universal_newlines=True,
+                                 bufsize=-1)
+        print("starting node of: {}".format(cmdline))
     except OSError as e:
         # only catch file not found error
         if e.errno == errno.ENOENT:
@@ -1145,13 +1160,26 @@ class LocalNodeController(NodeController):
         if self.isRunning():
             print("{:12} is already running".format(self._env['nick']))
             return True
+        print("starting {:12}".format(self._env['nick']))
         tor_path = self._env['tor']
         torrc = self._getTorrcFname()
         cmdline = [
             tor_path,
             "-f", torrc,
             ]
-        p = launch_process(cmdline)
+        p = launch_process(cmdline, start=True)
+        #TODO: special case for the Tor client running under Pin
+        #TODO: we need this case because launch_process uses
+        #TODO: os.system instead of Popen to run the process, which
+        #TODO: means the return value p is different from others.
+        #TODO: we should probably find a better way to do this later.
+        if "pin" in cmdline[0]:	# if the process is Pin
+            if p != 0:
+                print("Launching Pin command '{}' failed."
+                      .format(" ".join(cmdline)))
+                return False
+            return True
+
         if self.waitOnLaunch():
             # this requires that RunAsDaemon is set
             (stdouterr, empty_stderr) = p.communicate()
@@ -2349,7 +2377,7 @@ class Network(object):
     def start(self):
         """Start all our network's nodes and return True on no errors."""
         # format polling correctly - avoid printing a newline
-        sys.stdout.write("Starting nodes")
+        sys.stdout.write("Starting nodes\n")
         sys.stdout.flush()
         rv = all([n.getController().start() for n in self._nodes
                   if n._env['launch_phase'] ==
