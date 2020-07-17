@@ -284,18 +284,20 @@ def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True, st
     else:
         raise ValueError("Unknown tor_name: '{}'".format(tor_name))
     try:
-        #TODO: hardcoded condition. Set the Tor client
-	#TODO: node named "009c" to be tracked by Pin.
+        #TODO: hardcoded condition. Set the Tor relay
+	#TODO: node named "009r" to be tracked by Pin.
 	#TODO: Tracked Tor process must be spawned by
 	#TODO: os.system instead of Popen; otherwise,
 	#TODO: gdb remote connection cannot be established.
-        if start and "009c" in cmdline[2]:
+        if start and "009r" in cmdline[2]:
             pin = "/home/michael/Downloads/splice/pin-2.14-71313-gcc.4.4.7-linux/pin"
             cmdline.insert(0, pin)
             cmdline.insert(1, "-appdebug")
             cmdline.insert(2, "-t")
-            cmdline.insert(3, "/home/michael/Downloads/splice/obj-ia32/nullpin.so")
-            cmdline.insert(4, "--")
+            cmdline.insert(3, "/home/michael/Downloads/splice/obj-ia32/splice.so")
+            cmdline.insert(4, "-f")
+            cmdline.insert(5, "0")
+            cmdline.insert(6, "--")
             p = os.system(' '.join(cmdline))
         else:
             p = subprocess.Popen(cmdline,
